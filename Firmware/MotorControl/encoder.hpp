@@ -41,12 +41,14 @@ public:
                             // index search succeeds
         float offset_float = 0.0f; // Sub-count phase alignment offset
         float calib_range = 0.02f;
+        float pll_bandwidth = 157.0f;  // [rad/s] = [1/2pi Hz] //was 1000f, 1571rad/s = 250Hz, 300rad/s ~= 50Hz, 157rad/s = 25Hz
     };
 
     Encoder(const EncoderHardwareConfig_t& hw_config,
                      Config_t& config);
     
     void setup();
+    void set_pll_bandwidth(float pll_bandwidth);
     void set_error(Error_t error);
     bool do_checks();
 
@@ -83,9 +85,6 @@ public:
     float pll_kp_ = 0.0f;   // [counts/s / rad]
     float pll_ki_ = 0.0f;   // [(counts/s^2) / rad]
 
-    // float pos_sum_ = 0.0f;  // [counts]
-    // float pos_counter_ = 0.0f;  // [counts]
-
     //Counters for turning absolute encoder value into a continuous (and possibly negative) value for shadow_count
     int32_t shadow_counter_ = 0; //Overflow counter
     int32_t shadow_count_prev_ = 0; //Used for determining directionality
@@ -100,6 +99,7 @@ public:
             make_protocol_property("error", &error_),
             make_protocol_ro_property("is_ready", &is_ready_),
             make_protocol_ro_property("index_found", const_cast<bool*>(&index_found_)),
+            make_protocol_function("set_pll_bandwidth", *this, &Encoder::set_pll_bandwidth,"pll_bandwidth"),
             make_protocol_property("shadow_count", &shadow_count_),
             make_protocol_property("shadow_counter", &shadow_counter_),
             make_protocol_property("count_in_cpr", &count_in_cpr_),
@@ -120,7 +120,9 @@ public:
                 make_protocol_property("cpr", &config_.cpr),
                 make_protocol_property("offset", &config_.offset),
                 make_protocol_property("offset_float", &config_.offset_float),
-                make_protocol_property("calib_range", &config_.calib_range)
+                make_protocol_property("calib_range", &config_.calib_range), 
+                make_protocol_property("pll_bandwidth", &config_.pll_bandwidth)
+
             )
         );
     }

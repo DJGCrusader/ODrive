@@ -16,7 +16,7 @@ enum AxisState_t {
     AXIS_STATE_SENSORLESS_CONTROL = 5,  //<! run sensorless control
     AXIS_STATE_ENCODER_INDEX_SEARCH = 6, //<! run encoder index search
     AXIS_STATE_ENCODER_OFFSET_CALIBRATION = 7, //<! run encoder offset calibration
-    AXIS_STATE_CLOSED_LOOP_CONTROL = 8  //<! run closed loop control
+    AXIS_STATE_CLOSED_LOOP_CONTROL = 8,  //<! run closed loop control
 };
 
 struct AxisConfig_t {
@@ -25,6 +25,7 @@ struct AxisConfig_t {
                                                // this only has an effect if encoder.config.use_index is also true
     bool startup_encoder_offset_calibration = false; //<! run encoder offset calibration after startup, skip otherwise
     bool startup_closed_loop_control = false; //<! enable closed loop control after calibration/startup
+    bool startup_mixed_closed_loop_control = false; //<! enable closed loop control after calibration/startup
     bool startup_sensorless_control = false; //<! enable sensorless control after calibration/startup
     bool enable_step_dir = false; //<! enable step/dir input after calibration
                                  //   For M0 this has no effect if enable_uart is true
@@ -65,7 +66,8 @@ public:
             Encoder& encoder,
             SensorlessEstimator& sensorless_estimator,
             Controller& controller,
-            Motor& motor);
+            Motor& motor,
+            int axis_num);
 
     void setup();
     void start_thread();
@@ -144,6 +146,8 @@ public:
     SensorlessEstimator& sensorless_estimator_;
     Controller& controller_;
     Motor& motor_;
+    Axis *other_;
+    int axis_num_;
 
     osThreadId thread_id_;
     volatile bool thread_id_valid_ = false;
@@ -169,6 +173,7 @@ public:
                 make_protocol_property("startup_encoder_index_search", &config_.startup_encoder_index_search),
                 make_protocol_property("startup_encoder_offset_calibration", &config_.startup_encoder_offset_calibration),
                 make_protocol_property("startup_closed_loop_control", &config_.startup_closed_loop_control),
+                make_protocol_property("startup_mixed_closed_loop_control", &config_.startup_mixed_closed_loop_control),
                 make_protocol_property("startup_sensorless_control", &config_.startup_sensorless_control),
                 make_protocol_property("enable_step_dir", &config_.enable_step_dir),
                 make_protocol_property("counts_per_step", &config_.counts_per_step),

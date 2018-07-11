@@ -16,8 +16,7 @@ Encoder::Encoder(const EncoderHardwareConfig_t& hw_config,
 {
     // Calculate encoder pll gains
     // This calculation is currently identical to the PLL in SensorlessEstimator
-    float pll_bandwidth = 300.0f;  // [rad/s] = [1/2pi Hz] //was 1000f, 1571rad/s = 250Hz, 300rad/s ~= 50Hz
-    pll_kp_ = 2.0f * pll_bandwidth;
+    pll_kp_ = 2.0f * config.pll_bandwidth;
 
     // Critically damped
     pll_ki_ = 0.25f * (pll_kp_ * pll_kp_);
@@ -42,6 +41,17 @@ void Encoder::setup() {
     HAL_TIM_Encoder_Start(hw_config_.timer, TIM_CHANNEL_ALL);
     GPIO_subscribe(hw_config_.index_port, hw_config_.index_pin, GPIO_NOPULL,
             enc_index_cb_wrapper, this);
+}
+
+void Encoder::set_pll_bandwidth(float pll_bandwidth_new){
+    // Calculate encoder pll gains
+    // This calculation is currently identical to the PLL in SensorlessEstimator
+    //  pll_bandwidth is in [rad/s] = [1/2pi Hz] //was 1000f, 1571rad/s = 250Hz, 300rad/s ~= 50Hz
+    config_.pll_bandwidth = pll_bandwidth_new;
+    pll_kp_ = 2.0f * pll_bandwidth_new;
+
+    // Critically damped
+    pll_ki_ = 0.25f * (pll_kp_ * pll_kp_);
 }
 
 void Encoder::set_error(Encoder::Error_t error) {

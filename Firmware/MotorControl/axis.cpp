@@ -11,7 +11,8 @@ Axis::Axis(const AxisHardwareConfig_t& hw_config,
            Encoder& encoder,
            SensorlessEstimator& sensorless_estimator,
            Controller& controller,
-           Motor& motor)
+           Motor& motor, 
+           int axis_num)
     : hw_config_(hw_config),
       config_(config),
       encoder_(encoder),
@@ -23,6 +24,7 @@ Axis::Axis(const AxisHardwareConfig_t& hw_config,
     sensorless_estimator_.axis_ = this;
     controller_.axis_ = this;
     motor_.axis_ = this;
+    axis_num_ = axis_num;
 }
 
 static void step_cb_wrapper(void* ctx) {

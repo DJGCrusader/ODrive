@@ -106,6 +106,7 @@ bool Controller::update(float pos_estimate, float vel_estimate, float* current_s
         float v_err = vel_des - vel_estimate;
         Iq += config_.vel_gain * v_err;  //Damping Controller
 
+        Iq/=config_.gear_ratio; //Convert from joint N*m to motor N*m.
         Iq/=config_.torque_constant; //Convert from N*m to A. 
 
         // Current limiting
@@ -117,6 +118,61 @@ bool Controller::update(float pos_estimate, float vel_estimate, float* current_s
             Iq = -Ilim;
         }
 
+    }else if(config_.control_mode == CTRL_MODE_MIXED_IMPEDANCE_CONTROL){
+        float vel_des = vel_setpoint_;
+        
+        // Velocity limiting
+        float vel_lim = config_.vel_limit;
+        if (vel_des > vel_lim) vel_des = vel_lim;
+        if (vel_des < -vel_lim) vel_des = -vel_lim;
+
+        // Anti-cogging is enabled after calibration
+        // We get the current position and apply a current feed-forward
+        // ensuring that we handle negative encoder positions properly (-1 == motor->encoder.encoder_cpr - 1)
+        if (anticogging_.use_anticogging) {
+            Iq += anticogging_.cogging_map[mod(static_cast<int>(pos_estimate), axis_->encoder_.config_.cpr)];
+        }
+
+        //Mix and Unmix
+        int32_t myCpr = axis_->encoder_.config_.cpr;
+        if(!axis_->axis_num_){ //if Axis 0
+            float theta_s = 0.5f*(2*PI/myCpr)*(pos_estimate - axis_->other_->encoder_.pos_estimate_); //convert to radians
+            float theta_f = 0.5f*(2*PI/myCpr)*(pos_estimate + axis_->other_->encoder_.pos_estimate_);
+            float theta_s_dot = 0.5f*(2*PI/myCpr)*(vel_estimate - axis_->other_->encoder_.pll_vel_);
+            float theta_f_dot = 0.5f*(2*PI/myCpr)*(vel_estimate + axis_->other_->encoder_.pll_vel_);
+            float theta_s_desired = 0.0f;
+            float theta_f_desired = 0.0f;
+            float theta_s_dot_desired = 0.0f;
+            float theta_f_dot_desired = 0.0f;
+            //This calculation is done in radians.
+            float torque_s = config_.pos_gain*(theta_s_desired - theta_s) + config_.vel_gain*(theta_s_dot_desired - theta_s_dot);
+            float torque_f = config_.pos_gain2*(theta_f_desired - theta_f) + config_.vel_gain2*(theta_f_dot_desired - theta_f_dot);
+            Iq += 0.5f*(torque_f+torque_s);
+        }else{ //Else we are Axis 1
+            float theta_s = 0.5f*(2*PI/myCpr)*(axis_->other_->encoder_.pos_estimate_ - pos_estimate);
+            float theta_f = 0.5f*(2*PI/myCpr)*(axis_->other_->encoder_.pos_estimate_ + pos_estimate);
+            float theta_s_dot = 0.5f*(2*PI/myCpr)*(axis_->other_->encoder_.pll_vel_ - vel_estimate);
+            float theta_f_dot = 0.5f*(2*PI/myCpr)*(axis_->other_->encoder_.pll_vel_ + vel_estimate);
+            float theta_s_desired = 0.0f;
+            float theta_f_desired = 0.0f;
+            float theta_s_dot_desired = 0.0f;
+            float theta_f_dot_desired = 0.0f;
+            float torque_s = config_.pos_gain*(theta_s_desired - theta_s) + config_.vel_gain*(theta_s_dot_desired - theta_s_dot);
+            float torque_f = config_.pos_gain2*(theta_f_desired - theta_f) + config_.vel_gain2*(theta_f_dot_desired - theta_f_dot);
+            Iq += 0.5f*(torque_f-torque_s);
+        }
+
+        Iq/=config_.gear_ratio; //Convert from joint N*m to motor N*m.
+        Iq/=config_.torque_constant; //Convert from N*m to A. 
+
+        // Current limiting
+        float Ilim = std::min(axis_->motor_.config_.current_lim, axis_->motor_.current_control_.max_allowed_current);
+        if (Iq > Ilim) {
+            Iq = Ilim;
+        }
+        if (Iq < -Ilim) {
+            Iq = -Ilim;
+        }
     }else{
         // Position control
         // TODO Decide if we want to use encoder or pll position here

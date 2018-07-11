@@ -48,6 +48,7 @@ Possible values are:
 * `CTRL_MODE_VELOCITY_CONTROL`
 * `CTRL_MODE_CURRENT_CONTROL`
 * `CTRL_MODE_IMPEDANCE_CONTROL`
+* `CTRL_MODE_MIXED_IMPEDANCE_CONTROL`
 * `CTRL_MODE_VOLTAGE_CONTROL` - this one is not normally used.
 
 ### Tuning parameters
@@ -56,6 +57,7 @@ The motion control gains are currently manually tuned:
 * `<axis>.controller.config.vel_gain = 5.0f / 10000.0f` [A/(counts/s)] or [N*m*s/radian] in Impedance Control Mode
 * `<axis>.controller.config.vel_integrator_gain = 10.0f / 10000.0f` [A/((counts/s) * s)]
 * `<axis>.controller.config.torque_constant = 0.45f` [N*m/A], only used in Impedance Control Mode
+* `<axis>.controller.config.gear_ratio = (32/15)` [output gear/motor gear], only used in Impedance Control Mode
 
 An upcoming feature will enable automatic tuning. Until then, here is a rough tuning procedure:
 * Set the integrator gain to 0

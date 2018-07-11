@@ -159,8 +159,11 @@ int odrive_main(void) {
                                  hw_configs[i].gate_driver_config,
                                  motor_configs[i]);
         axes[i] = new Axis(hw_configs[i].axis_config, axis_configs[i],
-                *encoder, *sensorless_estimator, *controller, *motor);
+                *encoder, *sensorless_estimator, *controller, *motor, i);
     }
+    axes[0]->other_ = axes[1];
+    axes[1]->other_ = axes[0];
+
     
     // Start ADC for temperature measurements and user measurements
     start_general_purpose_adc();

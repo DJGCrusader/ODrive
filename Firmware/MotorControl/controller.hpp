@@ -12,14 +12,18 @@ typedef enum {
     CTRL_MODE_CURRENT_CONTROL = 1,
     CTRL_MODE_VELOCITY_CONTROL = 2,
     CTRL_MODE_POSITION_CONTROL = 3, 
-    CTRL_MODE_IMPEDANCE_CONTROL = 4
+    CTRL_MODE_IMPEDANCE_CONTROL = 4, 
+    CTRL_MODE_MIXED_IMPEDANCE_CONTROL = 5,
 } Motor_control_mode_t;
 
 struct ControllerConfig_t {
-    Motor_control_mode_t control_mode = CTRL_MODE_IMPEDANCE_CONTROL;  //see: Motor_control_mode_t
+    Motor_control_mode_t control_mode = CTRL_MODE_MIXED_IMPEDANCE_CONTROL;  //see: Motor_control_mode_t
     float pos_gain = 0.001f;  // [(counts/s) / counts] or [N*m/rad]
     float vel_gain = 0.0001f;  // [A/(counts/s)] or [N*m*s/rad]
-    float torque_constant = 0.45; //[N*m/A], only used in Impedance Control mode
+    float pos_gain2 = 0.001f;  // [(counts/s) / counts] or [N*m/rad] FOR MIXED MODE
+    float vel_gain2 = 0.0001f;  // [A/(counts/s)] or [N*m*s/rad]
+    float torque_constant = 0.45f; //[N*m/A], only used in Impedance Control mode
+    float gear_ratio = (32.0f/15.0f); //[N*m/A], only used in Impedance Control mode
     // float vel_gain = 5.0f / 200.0f, // [A/(rad/s)] <sensorless example>
     float vel_integrator_gain = 10.0f / 10000.0f;  // [A/(counts/s * s)]
     float vel_limit = 20000.0f;           // [counts/s]
@@ -69,6 +73,11 @@ public:
     // variables exposed on protocol
     float pos_setpoint_ = 0.0f;
     float vel_setpoint_ = 0.0f;
+    float theta_s_desired = 0.0f;
+    float theta_f_desired = 0.0f;
+    float theta_s_dot_desired = 0.0f;
+    float theta_f_dot_desired = 0.0f;
+
     // float vel_setpoint = 800.0f; <sensorless example>
     float vel_integrator_current_ = 0.0f;  // [A]
     float current_setpoint_ = 0.0f;        // [A]
@@ -84,6 +93,10 @@ public:
                 make_protocol_property("control_mode", &config_.control_mode),
                 make_protocol_property("pos_gain", &config_.pos_gain),
                 make_protocol_property("vel_gain", &config_.vel_gain),
+                make_protocol_property("pos_gain2", &config_.pos_gain2),
+                make_protocol_property("vel_gain2", &config_.vel_gain2),
+                make_protocol_property("torque_constant", &config_.torque_constant),
+                make_protocol_property("gear_ratio", &config_.gear_ratio),
                 make_protocol_property("vel_integrator_gain", &config_.vel_integrator_gain),
                 make_protocol_property("vel_limit", &config_.vel_limit)
             ),
