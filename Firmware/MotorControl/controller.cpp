@@ -27,6 +27,30 @@ void Controller::set_pos_setpoint(float pos_setpoint, float vel_feed_forward, fl
 #endif
 }
 
+void Controller::set_mixed_pos_setpoint(bool both,float sagittal, float frontal) {
+    theta_s_desired_ = sagittal;
+    theta_f_desired_ = frontal;
+    config_.control_mode = CTRL_MODE_MIXED_IMPEDANCE_CONTROL;
+    if(both) axis_->other_->controller_.set_mixed_pos_setpoint(false,sagittal, frontal);
+}
+
+void Controller::set_mixed_setpoint(bool both,float sagittal, float frontal, float sagittal_vel, float frontal_vel) {
+    theta_s_desired_ = sagittal;
+    theta_f_desired_ = frontal;
+    theta_s_dot_desired_ = sagittal_vel;
+    theta_f_dot_desired_ = frontal_vel;
+    config_.control_mode = CTRL_MODE_MIXED_IMPEDANCE_CONTROL;
+    if(both) axis_->other_->controller_.set_mixed_setpoint(false,sagittal, frontal, sagittal_vel, frontal_vel);
+}
+
+void Controller::set_mixed_gains(bool both, float kpS, float kpF, float kdS, float kdF){
+    config_.pos_gain = kpS;
+    config_.pos_gain2 = kpF;
+    config_.vel_gain = kdS;
+    config_.vel_gain2 = kdF;
+    if(both) axis_->other_->controller_.set_mixed_gains(false, kpS, kpF, kdS, kdF);
+}
+
 void Controller::set_vel_setpoint(float vel_setpoint, float current_feed_forward) {
     vel_setpoint_ = vel_setpoint;
     current_setpoint_ = current_feed_forward;
@@ -109,6 +133,8 @@ bool Controller::update(float pos_estimate, float vel_estimate, float* current_s
         Iq/=config_.gear_ratio; //Convert from joint N*m to motor N*m.
         Iq/=config_.torque_constant; //Convert from N*m to A. 
 
+        axis_->debug_ = v_err;
+
         // Current limiting
         float Ilim = std::min(axis_->motor_.config_.current_lim, axis_->motor_.current_control_.max_allowed_current);
         if (Iq > Ilim) {
@@ -117,8 +143,8 @@ bool Controller::update(float pos_estimate, float vel_estimate, float* current_s
         if (Iq < -Ilim) {
             Iq = -Ilim;
         }
-
-    }else if(config_.control_mode == CTRL_MODE_MIXED_IMPEDANCE_CONTROL){
+    }else 
+    if(config_.control_mode == CTRL_MODE_MIXED_IMPEDANCE_CONTROL){
         float vel_des = vel_setpoint_;
         
         // Velocity limiting
@@ -135,32 +161,22 @@ bool Controller::update(float pos_estimate, float vel_estimate, float* current_s
 
         //Mix and Unmix
         int32_t myCpr = axis_->encoder_.config_.cpr;
+
+        int axmod = 0;
         if(!axis_->axis_num_){ //if Axis 0
-            float theta_s = 0.5f*(2*PI/myCpr)*(pos_estimate - axis_->other_->encoder_.pos_estimate_); //convert to radians
-            float theta_f = 0.5f*(2*PI/myCpr)*(pos_estimate + axis_->other_->encoder_.pos_estimate_);
-            float theta_s_dot = 0.5f*(2*PI/myCpr)*(vel_estimate - axis_->other_->encoder_.pll_vel_);
-            float theta_f_dot = 0.5f*(2*PI/myCpr)*(vel_estimate + axis_->other_->encoder_.pll_vel_);
-            float theta_s_desired = 0.0f;
-            float theta_f_desired = 0.0f;
-            float theta_s_dot_desired = 0.0f;
-            float theta_f_dot_desired = 0.0f;
-            //This calculation is done in radians.
-            float torque_s = config_.pos_gain*(theta_s_desired - theta_s) + config_.vel_gain*(theta_s_dot_desired - theta_s_dot);
-            float torque_f = config_.pos_gain2*(theta_f_desired - theta_f) + config_.vel_gain2*(theta_f_dot_desired - theta_f_dot);
-            Iq += 0.5f*(torque_f+torque_s);
+            axmod = 1;
         }else{ //Else we are Axis 1
-            float theta_s = 0.5f*(2*PI/myCpr)*(axis_->other_->encoder_.pos_estimate_ - pos_estimate);
-            float theta_f = 0.5f*(2*PI/myCpr)*(axis_->other_->encoder_.pos_estimate_ + pos_estimate);
-            float theta_s_dot = 0.5f*(2*PI/myCpr)*(axis_->other_->encoder_.pll_vel_ - vel_estimate);
-            float theta_f_dot = 0.5f*(2*PI/myCpr)*(axis_->other_->encoder_.pll_vel_ + vel_estimate);
-            float theta_s_desired = 0.0f;
-            float theta_f_desired = 0.0f;
-            float theta_s_dot_desired = 0.0f;
-            float theta_f_dot_desired = 0.0f;
-            float torque_s = config_.pos_gain*(theta_s_desired - theta_s) + config_.vel_gain*(theta_s_dot_desired - theta_s_dot);
-            float torque_f = config_.pos_gain2*(theta_f_desired - theta_f) + config_.vel_gain2*(theta_f_dot_desired - theta_f_dot);
-            Iq += 0.5f*(torque_f-torque_s);
+            axmod = -1;
         }
+
+        //This calculation is done in radians. Control gain units are in Nm/rad and Nms/rad
+        theta_s_ = axmod*0.5f*(2*PI/myCpr)*(pos_estimate - axis_->other_->encoder_.pos_estimate_);
+        theta_f_ =       0.5f*(2*PI/myCpr)*(pos_estimate + axis_->other_->encoder_.pos_estimate_);
+        theta_s_dot_ = axmod*0.5f*(2*PI/myCpr)*(vel_estimate - axis_->other_->encoder_.pll_vel_);
+        theta_f_dot_ =       0.5f*(2*PI/myCpr)*(vel_estimate + axis_->other_->encoder_.pll_vel_);
+        torque_s_ = config_.pos_gain *(theta_s_desired_ - theta_s_) + config_.vel_gain *(theta_s_dot_desired_ - theta_s_dot_);
+        torque_f_ = config_.pos_gain2*(theta_f_desired_ - theta_f_) + config_.vel_gain2*(theta_f_dot_desired_ - theta_f_dot_);
+        Iq += 0.5f*(torque_f_+axmod*torque_s_);
 
         Iq/=config_.gear_ratio; //Convert from joint N*m to motor N*m.
         Iq/=config_.torque_constant; //Convert from N*m to A. 

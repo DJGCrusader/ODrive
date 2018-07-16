@@ -88,7 +88,7 @@ public:
     //Counters for turning absolute encoder value into a continuous (and possibly negative) value for shadow_count
     int32_t shadow_counter_ = 0; //Overflow counter
     int32_t shadow_count_prev_ = 0; //Used for determining directionality
-    bool shadow_flag_ = 0; //Used for the first step
+    bool shadow_flag_ = false; //Used for the first step
 
     // Updated by low_level pwm_adc_cb
     uint8_t hall_state_ = 0x0; // bit[0] = HallA, .., bit[2] = HallC

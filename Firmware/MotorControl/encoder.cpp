@@ -200,11 +200,12 @@ bool Encoder::run_offset_calibration() {
         return false;
 
     //TODO avoid recomputing elec_rad_per_enc every time
-    float elec_rad_per_enc = axis_->motor_.config_.pole_pairs * 2 * M_PI * (1.0f / (float)(config_.cpr));
-    float expected_encoder_delta = scan_distance / elec_rad_per_enc;
+    float elec_rad_per_enc = axis_->motor_.config_.pole_pairs * 2 * M_PI * (1.0f / (float)(config_.cpr)); //0.00575242795457
+    float expected_encoder_delta = scan_distance / elec_rad_per_enc;  //50.26548 / 0.00575242 = 8738.133333333
     float actual_encoder_delta_abs = fabsf(shadow_count_-init_enc_val);
     if(fabsf(actual_encoder_delta_abs - expected_encoder_delta)/expected_encoder_delta > config_.calib_range)
     {
+        axis_->debug_ = actual_encoder_delta_abs; 
         set_error(ERROR_CPR_OUT_OF_RANGE);
         return false;
     }
@@ -231,7 +232,7 @@ bool Encoder::run_offset_calibration() {
             return false; // error set inside enqueue_voltage_timings
         axis_->motor_.log_timing(Motor::TIMING_LOG_ENC_CALIB);
 
-        encvaluesum += shadow_count_;
+        encvaluesum += shadow_count_; // -500 -200 +100 +400 = -100 hmmmm 
         
         return ++i < num_steps;
     });
@@ -300,7 +301,6 @@ bool Encoder::update() {
             // osDelay(100);
             as5047p_data = as5047p_data & 0x3FFF;
             AS5047PEncoder.encoder_angle = (as5047p_data/16383.0)*360;
-            // AS5047PEncoder.encoder_cnt = (as5047p_data) * 4000/16383; //Old update when count was out of 4000
             AS5047PEncoder.encoder_cnt = (as5047p_data);  
 
             count_in_cpr_ = AS5047PEncoder.encoder_cnt;
@@ -309,12 +309,12 @@ bool Encoder::update() {
             // Need this code for shadow_count_ because raw absolute encoder loops around.
             if(shadow_flag_){
                 if(((config_.cpr*shadow_counter_ + count_in_cpr_)-shadow_count_prev_)<(-config_.cpr/2)){ //dEncdt>0
-                shadow_counter_++;
+                    shadow_counter_++;
                 }else if(((config_.cpr*shadow_counter_ + count_in_cpr_)-shadow_count_prev_)>(config_.cpr/2)){ //dEncdt<0
                     shadow_counter_--;
                 }
             }else{
-                shadow_flag_ = 1;
+                shadow_flag_=1; 
             }
             
             shadow_count_ = config_.cpr*shadow_counter_ + count_in_cpr_;

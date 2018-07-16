@@ -159,6 +159,7 @@ public:
     AxisState_t task_chain_[10] = { AXIS_STATE_UNDEFINED };
     AxisState_t& current_state_ = task_chain_[0];
     uint32_t loop_counter_ = 0;
+    float debug_ = 0.0f;
 
     // Communication protocol definitions
     auto make_protocol_definitions() {
@@ -184,6 +185,7 @@ public:
                 make_protocol_property("spin_up_target_vel", &config_.spin_up_target_vel)
             ),
             make_protocol_object("motor", motor_.make_protocol_definitions()),
+            make_protocol_ro_property("debug",&debug_),
             make_protocol_object("controller", controller_.make_protocol_definitions()),
             make_protocol_object("encoder", encoder_.make_protocol_definitions()),
             make_protocol_object("sensorless_estimator", sensorless_estimator_.make_protocol_definitions())
