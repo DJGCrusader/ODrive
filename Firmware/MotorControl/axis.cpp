@@ -172,13 +172,37 @@ bool Axis::run_sensorless_control_loop() {
     return error_ == ERROR_NONE;
 }
 
+void Axis::set_estimator_vals(float controller_divider, float vel_freq){
+    config_.controller_divider_ = (int)controller_divider; //run position control loop 8x slower 8242 = ~8000/8=~1000 = 1030.25, /16=515.125, /13 = 634
+    enc_dt_ = CURRENT_MEAS_PERIOD*config_.controller_divider_;
+    enc_hz = ((float)CURRENT_MEAS_HZ)/(float)config_.controller_divider_; 
+    config_.vel_freq_ = (int)vel_freq;
+    vel_lpf_ratio = ((float)config_.vel_freq_)/(enc_hz);
+}
+
 bool Axis::run_closed_loop_control_loop() {
     set_step_dir_enabled(config_.enable_step_dir);
     run_control_loop([this](){
         // Note that all estimators are updated in the loop prefix in run_control_loop
         float current_setpoint;
-        if (!controller_.update(encoder_.pos_estimate_, encoder_.pll_vel_, &current_setpoint))
-            return error_ |= ERROR_CONTROLLER_FAILED, false; //TODO: Make controller.set_error
+
+        if(config_.use_pll_){ //Use Default ODrive pll for position and velocity estimation
+            if (!controller_.update(encoder_.pos_estimate_, encoder_.pll_vel_, &current_setpoint))
+                return error_ |= ERROR_CONTROLLER_FAILED, false; //TODO: Make controller.set_error
+        }else{        //Use custom dgonz averaging and filtering
+            encoder_sum_+=(float)encoder_.shadow_count_;
+            control_counter_++;
+            if(control_counter_>=config_.controller_divider_){
+                encoder_avg_ = encoder_sum_ / (float)config_.controller_divider_;
+                vel_avg_ = (1.0-vel_lpf_ratio)*vel_avg_ + (vel_lpf_ratio)*(encoder_avg_ - encoder_avg_prev_)/enc_dt_;
+                control_counter_ = 0;
+                encoder_avg_prev_ = encoder_avg_;
+                encoder_sum_ = 0.0;
+            }
+            if (!controller_.update(encoder_avg_, vel_avg_, &current_setpoint))
+                return error_ |= ERROR_CONTROLLER_FAILED, false;
+        }
+
         if (!motor_.update(current_setpoint, encoder_.phase_))
             return false; // set_error should update axis.error_
         return true;
@@ -225,7 +249,7 @@ void Axis::run_state_machine_loop() {
                     task_chain_[pos++] = AXIS_STATE_ENCODER_INDEX_SEARCH;
                 if (config_.startup_encoder_offset_calibration)
                     task_chain_[pos++] = AXIS_STATE_ENCODER_OFFSET_CALIBRATION;
-                if (config_.startup_closed_loop_control)
+            if (config_.startup_closed_loop_control)
                     task_chain_[pos++] = AXIS_STATE_CLOSED_LOOP_CONTROL;
                 else if (config_.startup_sensorless_control)
                     task_chain_[pos++] = AXIS_STATE_SENSORLESS_CONTROL;

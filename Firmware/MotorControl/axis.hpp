@@ -38,6 +38,11 @@ struct AxisConfig_t {
     float spin_up_current = 10.0f;        // [A]
     float spin_up_acceleration = 400.0f;  // [rad/s^2]
     float spin_up_target_vel = 400.0f;    // [rad/s]
+
+
+    bool use_pll_ = 0;
+    int controller_divider_ = 13; //run position control loop 8x slower 8242 = ~8000/8=~1000 = 1030.25, /13=634
+    int vel_freq_ = 150;
 };
 
 class Axis {
@@ -132,9 +137,23 @@ public:
         }
     }
 
+    float debug_1_ = 42.0f;
+    float debug_2_ = 42.0f;
+
+    int control_counter_ = 0;
+    float encoder_avg_ = 0.0;
+    float encoder_sum_ = 0.0;
+    float encoder_avg_prev_ = 0.0;
+    float vel_avg_ = 0.0;
+    float enc_dt_ = CURRENT_MEAS_PERIOD*config_.controller_divider_;
+    float enc_hz = ((float)CURRENT_MEAS_HZ)/(float)config_.controller_divider_; 
+    float vel_lpf_ratio = ((float)config_.vel_freq_)/(enc_hz);
+
+    void set_estimator_vals(float controller_divider, float vel_freq);
     bool run_sensorless_spin_up();
     bool run_sensorless_control_loop();
     bool run_closed_loop_control_loop();
+
     bool run_idle_loop();
 
     void run_state_machine_loop();
@@ -159,7 +178,6 @@ public:
     AxisState_t task_chain_[10] = { AXIS_STATE_UNDEFINED };
     AxisState_t& current_state_ = task_chain_[0];
     uint32_t loop_counter_ = 0;
-    float debug_ = 0.0f;
 
     // Communication protocol definitions
     auto make_protocol_definitions() {
@@ -169,7 +187,11 @@ public:
             make_protocol_ro_property("current_state", &current_state_),
             make_protocol_property("requested_state", &requested_state_),
             make_protocol_ro_property("loop_counter", &loop_counter_),
+            make_protocol_ro_property("encoder_avg", &encoder_avg_),
+            make_protocol_ro_property("vel_avg", &vel_avg_),
+            make_protocol_function("set_estimator_vals", *this, &Axis::set_estimator_vals,"controller_divider", "vel_freq"),
             make_protocol_object("config",
+                make_protocol_property("use_pll", &config_.use_pll_),
                 make_protocol_property("startup_motor_calibration", &config_.startup_motor_calibration),
                 make_protocol_property("startup_encoder_index_search", &config_.startup_encoder_index_search),
                 make_protocol_property("startup_encoder_offset_calibration", &config_.startup_encoder_offset_calibration),
@@ -185,7 +207,8 @@ public:
                 make_protocol_property("spin_up_target_vel", &config_.spin_up_target_vel)
             ),
             make_protocol_object("motor", motor_.make_protocol_definitions()),
-            make_protocol_ro_property("debug",&debug_),
+            make_protocol_property("debug1",&debug_1_),
+            make_protocol_property("debug2",&debug_2_),
             make_protocol_object("controller", controller_.make_protocol_definitions()),
             make_protocol_object("encoder", encoder_.make_protocol_definitions()),
             make_protocol_object("sensorless_estimator", sensorless_estimator_.make_protocol_definitions())

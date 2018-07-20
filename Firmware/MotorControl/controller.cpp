@@ -44,6 +44,12 @@ void Controller::set_mixed_setpoint(bool both,float sagittal, float frontal, flo
 }
 
 void Controller::set_mixed_gains(bool both, float kpS, float kpF, float kdS, float kdF){
+    float rad2cpr = (2*PI/axis_->encoder_.config_.cpr);
+
+    if(kpS > (100.0*config_.gear_ratio)) kpS = 100*config_.gear_ratio;
+    if(kpS > (100.0*config_.gear_ratio)) kpS = 100*config_.gear_ratio; //Need 140
+    if(kpS > (0.5*config_.gear_ratio)) kpS = 0.5*config_.gear_ratio; //Need 1.15
+    if(kpS > (0.5*config_.gear_ratio)) kpS = 0.5*config_.gear_ratio;
     config_.pos_gain = kpS;
     config_.pos_gain2 = kpF;
     config_.vel_gain = kdS;
@@ -133,8 +139,6 @@ bool Controller::update(float pos_estimate, float vel_estimate, float* current_s
         Iq/=config_.gear_ratio; //Convert from joint N*m to motor N*m.
         Iq/=config_.torque_constant; //Convert from N*m to A. 
 
-        axis_->debug_ = v_err;
-
         // Current limiting
         float Ilim = std::min(axis_->motor_.config_.current_lim, axis_->motor_.current_control_.max_allowed_current);
         if (Iq > Ilim) {
@@ -170,10 +174,18 @@ bool Controller::update(float pos_estimate, float vel_estimate, float* current_s
         }
 
         //This calculation is done in radians. Control gain units are in Nm/rad and Nms/rad
-        theta_s_ = axmod*0.5f*(2*PI/myCpr)*(pos_estimate - axis_->other_->encoder_.pos_estimate_);
-        theta_f_ =       0.5f*(2*PI/myCpr)*(pos_estimate + axis_->other_->encoder_.pos_estimate_);
-        theta_s_dot_ = axmod*0.5f*(2*PI/myCpr)*(vel_estimate - axis_->other_->encoder_.pll_vel_);
-        theta_f_dot_ =       0.5f*(2*PI/myCpr)*(vel_estimate + axis_->other_->encoder_.pll_vel_);
+        if(axis_->config_.use_pll_){
+            theta_s_ = axmod*0.5f*(2*PI/myCpr)*(pos_estimate - axis_->other_->encoder_.pos_estimate_)/config_.gear_ratio; //perform these operations in joint space
+            theta_f_ =       0.5f*(2*PI/myCpr)*(pos_estimate + axis_->other_->encoder_.pos_estimate_)/config_.gear_ratio;
+            theta_s_dot_ = axmod*0.5f*(2*PI/myCpr)*(vel_estimate - axis_->other_->encoder_.pll_vel_)/config_.gear_ratio;
+            theta_f_dot_ =       0.5f*(2*PI/myCpr)*(vel_estimate + axis_->other_->encoder_.pll_vel_)/config_.gear_ratio;
+        }else{
+            theta_s_ = axmod*0.5f*(2*PI/myCpr)*(pos_estimate - axis_->other_->encoder_avg_)/config_.gear_ratio;
+            theta_f_ =       0.5f*(2*PI/myCpr)*(pos_estimate + axis_->other_->encoder_avg_)/config_.gear_ratio;
+            theta_s_dot_ = axmod*0.5f*(2*PI/myCpr)*(vel_estimate - axis_->other_->vel_avg_)/config_.gear_ratio;
+            theta_f_dot_ =       0.5f*(2*PI/myCpr)*(vel_estimate + axis_->other_->vel_avg_)/config_.gear_ratio;
+        }
+
         torque_s_ = config_.pos_gain *(theta_s_desired_ - theta_s_) + config_.vel_gain *(theta_s_dot_desired_ - theta_s_dot_);
         torque_f_ = config_.pos_gain2*(theta_f_desired_ - theta_f_) + config_.vel_gain2*(theta_f_dot_desired_ - theta_f_dot_);
         Iq += 0.5f*(torque_f_+axmod*torque_s_);

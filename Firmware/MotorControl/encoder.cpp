@@ -205,7 +205,6 @@ bool Encoder::run_offset_calibration() {
     float actual_encoder_delta_abs = fabsf(shadow_count_-init_enc_val);
     if(fabsf(actual_encoder_delta_abs - expected_encoder_delta)/expected_encoder_delta > config_.calib_range)
     {
-        axis_->debug_ = actual_encoder_delta_abs; 
         set_error(ERROR_CPR_OUT_OF_RANGE);
         return false;
     }
@@ -232,7 +231,7 @@ bool Encoder::run_offset_calibration() {
             return false; // error set inside enqueue_voltage_timings
         axis_->motor_.log_timing(Motor::TIMING_LOG_ENC_CALIB);
 
-        encvaluesum += shadow_count_; // -500 -200 +100 +400 = -100 hmmmm 
+        encvaluesum += shadow_count_;
         
         return ++i < num_steps;
     });
